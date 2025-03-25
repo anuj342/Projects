@@ -1,0 +1,144 @@
+import requests
+import socket
+import subprocess
+from bs4 import BeautifulSoup
+
+# Common directories to check
+COMMON_DIRS = [".git", "admin", "backup", "config", "uploads"]
+
+def check_open_ports(host, ports=[80, 443, 8080, 8443]):
+    """Scan common ports for HTTP/HTTPS services."""
+    print("\n[+] Checking open ports...")
+    for port in ports:
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.settimeout(2)
+        result = sock.connect_ex((host, port))
+        if result == 0:
+            print(f"  [OPEN] Port {port}")
+        sock.close()
+
+def get_http_headers(url):
+    """Retrieve and analyze HTTP headers."""
+    print("\n[+] Retrieving HTTP headers...")
+    try:
+        response = requests.get(url, timeout=5)
+        for header, value in response.headers.items():
+            print(f"  {header}: {value}")
+        
+        # Basic security misconfiguration checks
+        if "X-Frame-Options" not in response.headers:
+            print("  [!] X-Frame-Options missing (Clickjacking risk).")
+        if "X-XSS-Protection" not in response.headers:
+            print("  [!] X-XSS-Protection missing.")
+        if "Strict-Transport-Security" not in response.headers:
+            print("  [!] HSTS missing (HTTPS enforcement issue).")
+    except requests.exceptions.RequestException as e:
+        print(f"  [Error] Failed to fetch headers: {e}")
+
+def detect_server_info(url):
+    """Detect server and technology stack."""
+    print("\n[+] Detecting server information...")
+    try:
+        response = requests.get(url, timeout=5)
+        server_header = response.headers.get("Server", "Unknown")
+        x_powered_by = response.headers.get("X-Powered-By", "Unknown")
+        print(f"  Server: {server_header}")
+        print(f"  X-Powered-By: {x_powered_by}")
+    except requests.exceptions.RequestException as e:
+        print(f"  [Error] Could not detect server info: {e}")
+
+def check_exposed_directories(url, directories):
+    """Check for common exposed directories."""
+    print("\n[+] Scanning for exposed directories...")
+    for directory in directories:
+        dir_url = f"{url.rstrip('/')}/{directory}/"
+        try:
+            response = requests.get(dir_url, timeout=5)
+            if response.status_code == 200:
+                print(f"  [FOUND] {dir_url} (Status: 200)")
+            elif response.status_code == 403:
+                print(f"  [Forbidden] {dir_url} (403)")
+        except requests.exceptions.RequestException:
+            pass
+
+def find_hidden_forms(url):
+    """Extract hidden form fields from the webpage."""
+    print("\n[+] Checking for hidden form fields...")
+    try:
+        response = requests.get(url, timeout=5)
+        soup = BeautifulSoup(response.text, "html.parser")
+        hidden_inputs = soup.find_all("input", {"type": "hidden"})
+        for hidden_input in hidden_inputs:
+            print(f"  Hidden Field: {hidden_input}")
+    except requests.exceptions.RequestException:
+        print("  [Error] Unable to fetch the page.")
+
+def run_sqlmap(url):
+    """Run SQLMap for SQL Injection testing."""
+    print("\n[+] Running SQLMap for SQL Injection testing...")
+    try:
+        sqlmap_cmd = [
+            "sqlmap",
+            "-u", url,
+            "--batch",  # Run automatically without prompts
+            "--dbs", # Fetch available databases if vulnerable
+            "--risk=3",
+            "level=5"
+        ]
+        subprocess.run(sqlmap_cmd, check=True)
+    except FileNotFoundError:
+        print("  [Error] SQLMap is not installed. Install it using: git clone https://github.com/sqlmapproject/sqlmap.git")
+    except subprocess.CalledProcessError as e:
+        print(f"  [Error] SQLMap failed: {e}")
+
+def check_xss(url):
+    """Check for basic XSS vulnerabilities using a test payload."""
+    print("\n[+] Testing for XSS vulnerabilities...")
+    xss_payload = "<script>alert('XSS')</script>"
+    test_url = f"{url}?q={xss_payload}"
+    
+    try:
+        response = requests.get(test_url, timeout=5)
+        if xss_payload in response.text:
+            print(f"  [VULNERABLE] Possible XSS at {test_url}")
+        else:
+            print("  [SAFE] No immediate XSS detected.")
+    except requests.exceptions.RequestException as e:
+        print(f"  [Error] XSS test failed: {e}")
+
+def detect_csrf_tokens(url):
+    """Check if CSRF protection is implemented via tokens."""
+    print("\n[+] Checking for CSRF protection...")
+    try:
+        response = requests.get(url, timeout=5)
+        soup = BeautifulSoup(response.text, "html.parser")
+        csrf_tokens = soup.find_all("input", {"name": lambda x: x and "csrf" in x.lower()})
+        if csrf_tokens:
+            print(f"  [FOUND] CSRF tokens detected: {len(csrf_tokens)}")
+        else:
+            print("  [WARNING] No CSRF tokens found. Site may be vulnerable to CSRF attacks.")
+    except requests.exceptions.RequestException:
+        print("  [Error] Unable to fetch the page.")
+
+if __name__ == "__main__":
+    target_url = input("Enter the target URL (e.g., http://example.com): ").strip()
+    
+    if not target_url.startswith("http"):
+        print("[Error] Invalid URL format. Please include 'http://' or 'https://'.")
+        exit()
+    
+    print(f"\n[*] Scanning {target_url}...\n")
+    
+    try:
+        target_host = socket.gethostbyname(target_url.replace("http://", "").replace("https://", "").split("/")[0])
+        check_open_ports(target_host)
+        get_http_headers(target_url)
+        detect_server_info(target_url)
+        check_exposed_directories(target_url, COMMON_DIRS)
+        find_hidden_forms(target_url)
+        run_sqlmap(target_url)
+        check_xss(target_url)
+        detect_csrf_tokens(target_url)
+    
+    except Exception as e:
+        print(f"[!] Error: {e}")
