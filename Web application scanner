@@ -7,7 +7,6 @@ from bs4 import BeautifulSoup
 COMMON_DIRS = [".git", "admin", "backup", "config", "uploads"]
 
 def check_open_ports(host, ports=[80, 443, 8080, 8443]):
-    """Scan common ports for HTTP/HTTPS services."""
     print("\n[+] Checking open ports...")
     for port in ports:
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -18,14 +17,12 @@ def check_open_ports(host, ports=[80, 443, 8080, 8443]):
         sock.close()
 
 def get_http_headers(url):
-    """Retrieve and analyze HTTP headers."""
     print("\n[+] Retrieving HTTP headers...")
     try:
         response = requests.get(url, timeout=5)
         for header, value in response.headers.items():
             print(f"  {header}: {value}")
         
-        # Basic security misconfiguration checks
         if "X-Frame-Options" not in response.headers:
             print("  [!] X-Frame-Options missing (Clickjacking risk).")
         if "X-XSS-Protection" not in response.headers:
@@ -36,7 +33,7 @@ def get_http_headers(url):
         print(f"  [Error] Failed to fetch headers: {e}")
 
 def detect_server_info(url):
-    """Detect server and technology stack."""
+    
     print("\n[+] Detecting server information...")
     try:
         response = requests.get(url, timeout=5)
@@ -48,7 +45,7 @@ def detect_server_info(url):
         print(f"  [Error] Could not detect server info: {e}")
 
 def check_exposed_directories(url, directories):
-    """Check for common exposed directories."""
+    
     print("\n[+] Scanning for exposed directories...")
     for directory in directories:
         dir_url = f"{url.rstrip('/')}/{directory}/"
@@ -62,7 +59,7 @@ def check_exposed_directories(url, directories):
             pass
 
 def find_hidden_forms(url):
-    """Extract hidden form fields from the webpage."""
+    
     print("\n[+] Checking for hidden form fields...")
     try:
         response = requests.get(url, timeout=5)
@@ -74,7 +71,7 @@ def find_hidden_forms(url):
         print("  [Error] Unable to fetch the page.")
 
 def run_sqlmap(url):
-    """Run SQLMap for SQL Injection testing."""
+    
     print("\n[+] Running SQLMap for SQL Injection testing...")
     try:
         sqlmap_cmd = [
@@ -92,7 +89,7 @@ def run_sqlmap(url):
         print(f"  [Error] SQLMap failed: {e}")
 
 def check_xss(url):
-    """Check for basic XSS vulnerabilities using a test payload."""
+    
     print("\n[+] Testing for XSS vulnerabilities...")
     xss_payload = "<script>alert('XSS')</script>"
     test_url = f"{url}?q={xss_payload}"
@@ -107,7 +104,7 @@ def check_xss(url):
         print(f"  [Error] XSS test failed: {e}")
 
 def detect_csrf_tokens(url):
-    """Check if CSRF protection is implemented via tokens."""
+    
     print("\n[+] Checking for CSRF protection...")
     try:
         response = requests.get(url, timeout=5)
